@@ -21,9 +21,18 @@ import com.ib.client.OrderState;
 import com.ib.client.PriceIncrement;
 import com.ib.client.SoftDollarTier;
 import com.ib.client.TickAttr;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
+import javax.swing.text.DateFormatter;
+import java.io.Console;
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 public class AutoTrader extends Thread implements EWrapper {
 
@@ -31,18 +40,30 @@ public class AutoTrader extends Thread implements EWrapper {
   private final ConnectionConfig connectionConfig;
 
   // EWrapper Settings
+
+  // Keep track of the next Order ID
+  private int nextOrderID = 0;
   private int currentOrderId = 0;
   private double limitPrice;
   private int currentTick = 1000;
+  private int currentReqId = 0;
 
   private final EClientSocket clientSocket;
   private final EReaderSignal readerSignal;
   private ConnectionListener connectionListener;
   private final Contract contract;
+  private TraderConfig traderConfig;
 
-  public AutoTrader(ConnectionConfig connectionConfig, Contract contract) {
+  private TreeMap<LocalDate, MovingAverageBar> historicalBars = new TreeMap<>();
+  private TreeMap<LocalDate, MovingAverageBar> realtimeBars = new TreeMap<>();
+
+  // Each client deal with one contract, thus only has one order at any time
+  private Order currentOrder;
+
+  public AutoTrader(ConnectionConfig connectionConfig, TraderConfig traderConfig, Contract contract) {
 
       this.connectionConfig = connectionConfig;
+      this.traderConfig = traderConfig;
       this.contract = contract;
       this.readerSignal = new EJavaSignal();
 
@@ -93,29 +114,29 @@ public class AutoTrader extends Thread implements EWrapper {
 
     System.out.println("Requesting historical data...");
     clientSocket.reqHistoricalData(currentTick++, contract, endDate, duration, "1 day",
-        "TRADES", 1, 1, false, null);
+        "TRADES", 1, 1, true, null);
   }
 
   public void simulate() {
 //    client.reqHistoricalTicks();
   }
 
-  public void sendMarketOrder(String action, int quantity) {
+  public void sendMarketOrder(String action, double quantity) {
 
     if (!clientSocket.isConnected()) {
       throw new IllegalStateException();
     }
 
     // Create order
-    Order marketOrder = new Order();
-    marketOrder.action(action);
-    marketOrder.orderId(currentOrderId++);
-    marketOrder.orderType("MKT");
-    marketOrder.totalQuantity(quantity);
-    marketOrder.account(connectionConfig.getAccount());
-
+    currentOrder = new Order();
+    currentOrder.action(action);
+    currentOrder.orderId(currentOrderId);
+    currentOrder.orderType("TRAIL LIMIT");
+    currentOrder.totalQuantity(quantity);
+    currentOrder.account(connectionConfig.getAccount());
+    currentOrder.trailStopPrice(realtimeBars.lastEntry().getValue().close() * (1 - traderConfig.getStopLoss()));
     // Place order
-    clientSocket.placeOrder(currentOrderId++, contract, marketOrder);
+    clientSocket.placeOrder(currentOrderId++, contract, currentOrder);
   }
 
 
@@ -164,6 +185,13 @@ public class AutoTrader extends Thread implements EWrapper {
     System.out.println("OpenOrder. ID: "+orderId+", "+contract.symbol()+", "+contract.secType()+" @ "
         +contract.exchange()+": "+ order.action()+", "+order.orderType()+" "
         +order.totalQuantity()+", "+orderState.status());
+
+//    traderConfig.setAssetUnderManagement(order.totalQuantity() * realtimeBars.lastEntry().getValue().close());
+//    traderConfig.addAssets(realtimeBars.lastKey(), traderConfig.getAssetUnderManagement());
+
+    // Update trailing stop loss if current trailing price is smaller than the new one
+    if (order.trailStopPrice() < realtimeBars.lastEntry().getValue().close() * (1 - traderConfig.getStopLoss()))
+    currentOrder.trailStopPrice(realtimeBars.lastEntry().getValue().close() * (1 - traderConfig.getStopLoss()));
   }
 
   @Override
@@ -194,7 +222,8 @@ public class AutoTrader extends Thread implements EWrapper {
 
   @Override
   public void nextValidId(int i) {
-
+    System.out.println("Next Valid Id: "+ i);
+    currentOrderId = i;
   }
 
   @Override
@@ -252,6 +281,12 @@ public class AutoTrader extends Thread implements EWrapper {
     System.out.println("HistoricalData. "+ requestId +" - Date: "+bar.time()+", Open: "+bar.open()+
         ", High: "+bar.high()+", Low: "+bar.low()+", Close: "+bar.close()+", Volume: "+
         bar.volume()+", Count: "+bar.count()+", WAP: "+bar.wap());
+
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss");
+    LocalDate currentDate = LocalDate.parse(bar.time(),formatter);
+    historicalBars.put(currentDate, new MovingAverageBar(bar.time(), bar.open(), bar.high(), bar.low(), bar.close(),
+                    bar.volume(), bar.count(), bar.wap()));
+
   }
 
   @Override
@@ -274,6 +309,57 @@ public class AutoTrader extends Thread implements EWrapper {
   public void realtimeBar(int i, long l, double v, double v1, double v2, double v3, long l1,
       double v4, int i1) {
 
+    int reqId = i, count = i1;
+    double open = v, high = v1, low = v2, close = v3, wap = v4;
+    long volume = l1;
+
+    LocalDate currentDate = Instant.ofEpochMilli(l).atZone(ZoneId.systemDefault()).toLocalDate();
+    LocalDate dateAgo200 = currentDate.minus(Period.ofDays(199));
+    LocalDate dateAgo50 = currentDate.minus(Period.ofDays(49));
+    LocalDate dateAgo20 = currentDate.minus(Period.ofDays(19));
+
+
+    double movingSum20 = 0;
+    SortedMap<LocalDate, MovingAverageBar> bars20 = realtimeBars.tailMap(dateAgo20, true);
+    for (Map.Entry<LocalDate, MovingAverageBar> entry20 : bars20.entrySet()) {
+      LocalDate key = entry20.getKey();
+      movingSum20 = movingSum20 + entry20.getValue().close();
+    }
+    realtimeBars.get(currentDate).setMovingAvg20(movingSum20/20);
+
+    double movingSum50 = 0;
+    SortedMap<LocalDate, MovingAverageBar> bars50 = realtimeBars.tailMap(dateAgo50, true);
+    for (Map.Entry<LocalDate, MovingAverageBar> entry50 : bars50.entrySet()) {
+      LocalDate key = entry50.getKey();
+      movingSum20 = movingSum20 + entry50.getValue().close();
+    }
+    realtimeBars.get(currentDate).setMovingAvg50(movingSum50/50);
+
+    double movingSum200 = 0;
+    SortedMap<LocalDate, MovingAverageBar> bars200 = realtimeBars.tailMap(dateAgo200, true);
+    for (Map.Entry<LocalDate, MovingAverageBar> entry200 : bars200.entrySet()) {
+      LocalDate key = entry200.getKey();
+      movingSum200 = movingSum200 + entry200.getValue().close();
+    }
+    realtimeBars.get(currentDate).setMovingAvg200(movingSum200/200);
+
+    // If there is an active order already, update trailing stop loss if necessary
+    if (currentOrder != null){
+      clientSocket.reqOpenOrders();
+    }
+
+    // If there is no active order, buy when all 4 conditions are met
+    else if (movingSum20 > movingSum50 && movingSum50 > movingSum200 && open > movingSum200 && low > movingSum200){
+      sendMarketOrder("BUY", traderConfig.getAssetUnderManagement()/high);
+
+      // TODO: Might need to check the status of the order to ensure is is successfully submitted
+//    traderConfig.setAssetUnderManagement(order.totalQuantity() * realtimeBars.lastEntry().getValue().close());
+//    traderConfig.addAssets(realtimeBars.lastKey(), traderConfig.getAssetUnderManagement());
+
+    }
+
+    // Update AUM
+    clientSocket.reqAccountSummary(currentReqId++, "All", "NetLiquidation");
   }
 
   @Override
@@ -318,6 +404,12 @@ public class AutoTrader extends Thread implements EWrapper {
 
   @Override
   public void accountSummary(int i, String s, String s1, String s2, String s3) {
+    System.out.println("ReqId: "+ i +" - account: "+ s + s1 + " : " +
+            s2 + " " + s3);
+    if (s1.equals("NetLiquidation")) {
+      traderConfig.setAssetUnderManagement(Double.parseDouble(s2));
+      traderConfig.addAssets(realtimeBars.lastKey(), traderConfig.getAssetUnderManagement());
+    }
 
   }
 
@@ -429,7 +521,23 @@ public class AutoTrader extends Thread implements EWrapper {
 
   @Override
   public void historicalDataEnd(int reqId, String startDateStr, String endDateStr) {
-    System.out.println("HistoricalDataEnd. "+reqId+" - Start Date: "+startDateStr+", End Date: "+endDateStr);
+
+
+//    System.out.println("HistoricalDataEnd. "+reqId+" - Start Date: "+startDateStr+", End Date: "+endDateStr);
+
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss");
+    LocalDate startDate = LocalDate.parse(startDateStr,formatter);
+    LocalDate endDate = LocalDate.parse(endDateStr,formatter);
+    LocalDate date200 = startDate.plus(Period.ofDays(199));
+    SortedMap<LocalDate, MovingAverageBar> barsAfter200Days = historicalBars.tailMap(date200, true);
+
+    // Start from the 200th day.
+    for(Map.Entry<LocalDate, MovingAverageBar> entry : barsAfter200Days.entrySet()) {
+      MovingAverageBar bar = entry.getValue();
+      realtimeBars.put(entry.getKey(), bar);
+      realtimeBar(reqId, entry.getKey().toEpochDay(), bar.open(),
+              bar.high(), bar.low(), bar.close(), bar.volume(), bar.wap(), bar.count());
+    }
   }
 
   @Override

@@ -1,6 +1,7 @@
 public class ConnectionConfig {
 
   private String account = "ccas0000";
+//  private String account = "aqtutu777";
   private int clientId = 1;
   private int socketPort = 7496;
   private String host = "127.0.0.1";
