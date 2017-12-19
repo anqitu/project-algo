@@ -12,8 +12,8 @@ public class AutoTraderApp implements ConnectionListener {
     autoTrader.initSimulation("", "1 D");
   }
 
-  public AutoTraderApp(ConnectionConfig connectionConfig, TraderConfig traderConfig,  Contract contract) {
-    autoTrader = new AutoTrader(connectionConfig, traderConfig, contract);
+  public AutoTraderApp(ConnectionConfig connectionConfig, TradeConfig tradeConfig,  Contract contract) {
+    autoTrader = new AutoTrader(connectionConfig, tradeConfig, contract);
     autoTrader.setConnectionListener(this);
   }
 
@@ -61,10 +61,10 @@ public class AutoTraderApp implements ConnectionListener {
     connectionConfig.setSocketPort(7496); // TWS
 //    connectionConfig.setSocketPort(4002); // IB Gateway
 
-    TraderConfig traderConfig = new TraderConfig();
-    traderConfig.setStopLoss(0.2);
-    traderConfig.setAssetUnderManagement(1000000);
-    traderConfig.setMovingAvgRange(0.1);
+    TradeConfig tradeConfig = new TradeConfig();
+    tradeConfig.setStopLoss(0.2);
+    tradeConfig.setAssetUnderManagement(1000000);
+    tradeConfig.setMovingAvgRange(0.1);
 
     // NIKE Contract
     Contract nkeContract = new Contract();
@@ -74,7 +74,7 @@ public class AutoTraderApp implements ConnectionListener {
     nkeContract.exchange("SMART");
     nkeContract.primaryExch("ISLAND");
 
-    AutoTraderApp autoTraderApp = new AutoTraderApp(connectionConfig, traderConfig, nkeContract);
+    AutoTraderApp autoTraderApp = new AutoTraderApp(connectionConfig, tradeConfig, nkeContract);
     autoTraderApp.start();
 
     // Shutdown gracefully

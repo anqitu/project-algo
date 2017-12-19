@@ -1,8 +1,9 @@
+import com.ib.client.Bar;
 import com.ib.client.Contract;
 
 import java.util.Date;
 
-public class MovingAverageBar extends com.ib.client.Bar {
+public class MovingAverageBar extends Bar {
     private double movingAvg20;
     private double movingAvg50;
     private double movingAvg200;
@@ -13,12 +14,11 @@ public class MovingAverageBar extends com.ib.client.Bar {
     }
 
     public MovingAverageBar(String s, double v, double v1, double v2, double v3, long l, int i, double v4,
-                            double movingAvg20, double movingAvg50, double movingAvg200, double movingAvgRange) {
+                            double movingAvg20, double movingAvg50, double movingAvg200) {
         super(s, v, v1, v2, v3, l, i, v4);
         this.movingAvg20 = movingAvg20;
         this.movingAvg50 = movingAvg50;
         this.movingAvg200 = movingAvg200;
-        this.movingAvgRange = movingAvgRange;
     }
 
     public void setMovingAvg20(double movingAvg20) {
