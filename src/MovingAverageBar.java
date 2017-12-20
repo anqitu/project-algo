@@ -1,56 +1,16 @@
-import com.ib.client.Bar;
-import com.ib.client.Contract;
+import com.ib.controller.Bar;
+import java.util.HashMap;
 
-import java.util.Date;
+public class MovingAverageBar {
 
-public class MovingAverageBar extends Bar {
-    private double movingAvg20;
-    private double movingAvg50;
-    private double movingAvg200;
-    private double movingAvgRange;
+  // <Days, Moving Average>
+  private HashMap<Integer, Double> movingAverage;
+  private Bar bar;
 
-    public MovingAverageBar(String s, double v, double v1, double v2, double v3, long l, int i, double v4) {
-        super(s, v, v1, v2, v3, l, i, v4);
-    }
-
-    public MovingAverageBar(String s, double v, double v1, double v2, double v3, long l, int i, double v4,
-                            double movingAvg20, double movingAvg50, double movingAvg200) {
-        super(s, v, v1, v2, v3, l, i, v4);
-        this.movingAvg20 = movingAvg20;
-        this.movingAvg50 = movingAvg50;
-        this.movingAvg200 = movingAvg200;
-    }
-
-    public void setMovingAvg20(double movingAvg20) {
-        this.movingAvg20 = movingAvg20;
-    }
-
-    public void setMovingAvg50(double movingAvg50) {
-        this.movingAvg50 = movingAvg50;
-    }
-
-    public void setMovingAvg200(double movingAvg200) {
-        this.movingAvg200 = movingAvg200;
-    }
-
-    public double getMovingAvg20() {
-        return movingAvg20;
-    }
-
-    public double getMovingAvg50() {
-        return movingAvg50;
-    }
-
-    public double getMovingAvg200() {
-        return movingAvg200;
-    }
-
-    public double getMovingAvgRange() {
-        return movingAvgRange;
-    }
-
-    public void setMovingAvgRange(double movingAvgRange) {
-
-        this.movingAvgRange = movingAvgRange;
-    }
+  public MovingAverageBar(Bar bar) {
+    this.bar = bar;
+    movingAverage.put(20, 0.0);
+    movingAverage.put(50, 0.0);
+    movingAverage.put(200, 0.0);
+  }
 }
