@@ -107,9 +107,10 @@ public class AutoTraderApp {
               boolean previousPosition = previous.getProperty("position") == 1;
               boolean shouldBuy = !previousPosition && previous.getProperty("all_4") == 0 &&
                   bar.getProperty("all_4") == 1;
-              bar.setProperty("position", shouldBuy ? 1 : (previousPosition ? 1 : 0));
+              bar.setProperty("position", shouldBuy ? 1 :
+                  (previousPosition && previous.getProperty("stop_out") == 0 ? 1 : 0));
 
-              if (previousPosition) {
+              if (previousPosition && bar.getProperty("position") ==1) {
                 bar.setProperty("entry_price", previous.getProperty("entry_price"));
                 bar.setProperty("initial_stop_loss", previous.getProperty("initial_stop_loss"));
                 bar.setProperty("trailing_stop_loss",
