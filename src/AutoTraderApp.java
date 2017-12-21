@@ -21,7 +21,8 @@ public class AutoTraderApp {
   }
 
   public static void main(String[] args) {
-    AutoTrader autoTrader = new AutoTrader();
+
+    AutoTrader autoTrader = new AutoTrader(host, port, clientId);
 //    autoTrader.run();
 
     StkContract nkeContract = new StkContract("NKE");
@@ -30,7 +31,6 @@ public class AutoTraderApp {
         1000000);
     tradingConfig.setStopLoss(nkeContract, 0.2);
 
-    AutoTrader autoTrader = new AutoTrader(host, port, clientId);
     autoTrader.runSimulation(
         Arrays.asList(nkeContract), tradingConfig, 18,
         58, new Strategy() {
@@ -138,7 +138,7 @@ public class AutoTraderApp {
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
 
             double low = bar.getLow();
-            double trailingStopLoss = bar.getProperty("traling_stop_loss");
+            double trailingStopLoss = bar.getProperty("trailing_stop_loss");
 
             boolean shouldSell = bar.getProperty("position") == 1 && low < trailingStopLoss;
             if (shouldSell) {

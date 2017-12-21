@@ -60,7 +60,7 @@ public class AutoTrader {
 
           @Override
           public void historicalData(com.ib.controller.Bar bar) {
-            historicalData.put(LocalDate.ofEpochDay(bar.time()), bar);
+            historicalData.put(Utilities.formatDate(bar.time()), bar);
           }
 
           @Override
@@ -99,7 +99,8 @@ public class AutoTrader {
       marketData.put(contract, new TreeMap<>());
       getHistoricalData(contract, years, historicalData -> {
 
-        LocalDate offset = historicalData.keySet().toArray(new LocalDate[historicalData.size()])[offsetDays];
+        LocalDate offset = historicalData.keySet().
+            toArray(new LocalDate[historicalData.size()])[offsetDays];
 
         // Simulate daily bars
         for (LocalDate date: historicalData.tailMap(offset).keySet()) {
