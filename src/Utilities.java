@@ -13,4 +13,10 @@ public class Utilities {
     return date.format(formatter);
 
   }
+
+  public static LocalDate formatDate(long date){
+
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss");
+    return Instant.ofEpochMilli(date).atZone(ZoneId.systemDefault()).toLocalDate();
+  }
 }
