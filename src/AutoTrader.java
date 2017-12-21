@@ -13,24 +13,45 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.concurrent.Semaphore;
 
 interface MarketDataReceiver {
   void receive(HashMap<Contract, TreeMap<LocalDate, Bar>> marketData);
 }
 
-interface ContractMarketDataReceiver {
+interface HistoricalContractMarketDataReceiver {
   void receive(TreeMap<LocalDate, com.ib.controller.Bar> historicalData);
 }
 
+interface HistoricalMarketDataReceiver {
+  void receive(HashMap<Contract, TreeMap<LocalDate, com.ib.controller.Bar>> marketData);
+}
+
 interface Strategy {
+
   Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
       Contract contract, com.ib.controller.Bar bar);
+
   boolean shouldBuy(AssetManager am, Contract contract,
-      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar curentBar);
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
+
   boolean shouldSell(AssetManager am, Contract contract,
-      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar curentBar);
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
+
   double getExitPrice(AssetManager am, Contract contract,
-      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar curentBar);
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
+
+  double getEquilibratePrice(AssetManager am, Contract contract,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
+
+  double getEntryPrice(AssetManager am, Contract contract,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
+
+  boolean shouldEquilibrate(AssetManager am,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData);
+
+  void postProcess(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
+      Contract contract, Bar bar);
 }
 
 public class AutoTrader {
@@ -50,7 +71,7 @@ public class AutoTrader {
   }
 
   public void getHistoricalData(Contract contract, int years,
-      ContractMarketDataReceiver marketDataReceiver) {
+      HistoricalContractMarketDataReceiver marketDataReceiver) {
     TreeMap<LocalDate, com.ib.controller.Bar> historicalData = new TreeMap<>();
 
     System.out.println(String.format("Requesting (%d) years worth of daily historical data for %s",
@@ -65,9 +86,42 @@ public class AutoTrader {
 
           @Override
           public void historicalDataEnd() {
+            System.out.println("Received data for " + contract.symbol());
             marketDataReceiver.receive(historicalData);
           }
         });
+  }
+
+  // SYNC
+//  public void getHistoricalData(List<Contract> contracts, int years,
+//      HistoricalMarketDataReceiver marketDataReceiver) {
+//    HashMap<Contract, TreeMap<LocalDate, com.ib.controller.Bar>> marketData = new HashMap<>();
+//    Semaphore semaphore = new Semaphore(0);
+//    for (Contract contract : contracts) {
+//      getHistoricalData(contract, years, historicalData -> {
+//        semaphore.release(1);
+//        marketData.put(contract, historicalData);
+//        if (marketData.size() == contracts.size()) {
+//          semaphore.drainPermits();
+//          marketDataReceiver.receive(marketData);
+//        }
+//      });
+//
+//      // wait for release
+//      try { semaphore.acquire(); } catch (InterruptedException ex) { }
+//    }
+//  }
+
+  public void getHistoricalData(List<Contract> contracts, int years,
+      HistoricalMarketDataReceiver marketDataReceiver) {
+    HashMap<Contract, TreeMap<LocalDate, com.ib.controller.Bar>> marketData = new HashMap<>();
+    for (Contract contract : contracts) {
+      getHistoricalData(contract, years, historicalData -> {
+        marketData.put(contract, historicalData);
+        if (marketData.size() == contracts.size())
+          marketDataReceiver.receive(marketData);
+      });
+    }
   }
 
   public void exportHistoricalData(String[] columns, TreeMap<LocalDate, Bar> marketData,
@@ -92,74 +146,88 @@ public class AutoTrader {
   public void runSimulation(List<Contract> contracts, TradingConfig config, int years,
       int offsetDays, Strategy strategy, MarketDataReceiver marketDataReceiver) {
 
-    AssetManager am = new AssetManager(config.getAssetUnderManagement());
-    HashMap<Contract, TreeMap<LocalDate, Bar>> marketData = new HashMap<>();
+    System.out.println("Fetching historical data...");
+    getHistoricalData(contracts, years, historicalMarketData -> {
 
-    for (Contract contract : contracts) {
-      marketData.put(contract, new TreeMap<>());
-      getHistoricalData(contract, years, historicalData -> {
+      for (Contract contract : contracts) {
+        System.out.println(contract.symbol() + " " + historicalMarketData.get(contract).firstEntry().getValue().formattedTime());
+      }
 
-        LocalDate offset = historicalData.keySet().
-            toArray(new LocalDate[historicalData.size()])[offsetDays];
+      System.out.println("Simulation started!");
+      AssetManager am = new AssetManager(config.getAssetUnderManagement());
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData = new HashMap<>();
 
-        // Simulate daily bars
-        for (LocalDate date: historicalData.tailMap(offset).keySet()) {
-          Bar bar = strategy.prepare(am, marketData, contract, historicalData.get(date));
+      // Assuming all contracts have the same available dates
+      TreeMap<LocalDate, com.ib.controller.Bar> contractHistoricalData =
+          historicalMarketData.get(contracts.get(0));
+      LocalDate offset = contractHistoricalData.keySet().
+          toArray(new LocalDate[contractHistoricalData.size()])[offsetDays];
+
+      for (Contract contract : contracts)
+        marketData.put(contract, new TreeMap<>());
+
+      for (LocalDate date : contractHistoricalData.tailMap(offset).keySet()) {
+
+        // Prepare market bars
+        for (Contract contract : contracts) {
+          contractHistoricalData = historicalMarketData.get(contract);
+          Bar bar = strategy.prepare(am, marketData, contract, contractHistoricalData.get(date));
           marketData.get(contract).put(date, bar);
-
-          if (strategy.shouldBuy(am, contract, marketData, bar)) {
-
-            // Split total asset value by number of active assets
-            int activeAssets = am.getContracts().length + 1;
-
-            // Redistributed value per contract
-            double redistAssetValue = am.getTotalAssetValue(marketData) / activeAssets;
-
-            // Use the freed assets to purchase the new contract
-            double freedAssets = am.getResidualAssets();
-
-            // Execute the selling of owned stocks to redistribute assets
-            for (Contract otherContract : am.getContracts()) {
-              if (!otherContract.equals(contract)) {
-
-                Bar currentBar = marketData.get(otherContract).lastEntry().getValue();
-                int owned = am.getOwnedStocks(otherContract);
-
-                // Stocks to sell = (closing * owned) - redistributed value / low
-                int toSell = new Double((currentBar.getClose() * owned - redistAssetValue) /
-                    currentBar.getLow()).intValue();
-
-                // Update assets with new balance = owned - toSell
-                am.setOwnedStocks(otherContract, owned - toSell);
-                double gain = toSell * currentBar.getLow();
-                freedAssets += gain;
-              }
-            }
-
-            // simulate buy
-            double buyPrice = marketData.get(contract).lastEntry().getValue().getHigh();
-            int toBuy = new Double(freedAssets / buyPrice).intValue();
-            am.setResidualAssets(freedAssets - buyPrice * toBuy);
-            am.setOwnedStocks(contract, toBuy);
-
-          }
-
-          if (strategy.shouldSell(am, contract, marketData, bar)) {
-
-            double sellPrice = strategy.getExitPrice(am, contract, marketData, bar);
-
-            // simulate sell
-            am.setResidualAssets(am.getResidualAssets() + sellPrice * am.getOwnedStocks(contract));
-            am.setOwnedStocks(contract, 0);
-
-          }
-
-          bar.setProperty("aum", am.getTotalAssetValue(marketData));
-          bar.setProperty("stocks_owned", am.getOwnedStocks(contract));
         }
 
-        marketDataReceiver.receive(marketData);
-      });
-    }
+        // Determine action and execute sell if needed
+        for (Contract contract : contracts) {
+          Bar bar = marketData.get(contract).get(date);
+          bar.setShouldBuy(strategy.shouldBuy(am, contract, marketData, bar));
+          bar.setShouldSell(strategy.shouldSell(am, contract, marketData, bar));
+
+          if (bar.shouldSell()) {
+            double sellPrice = strategy.getExitPrice(am, contract, marketData, bar);
+            am.setResidualAssets(am.getResidualAssets() + sellPrice * am.getOwnedStocks(contract));
+            am.setOwnedStocks(contract, 0);
+          }
+        }
+
+        if (strategy.shouldEquilibrate(am, marketData)) {
+          Contract[] activeContracts = am.getContracts();
+          int split = (int) (am.getContracts().length + marketData.keySet().stream()
+              .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
+                  am.getOwnedStocks(contract) == 0).count());
+
+          for (Contract contract : activeContracts) {
+            Bar lastBar = marketData.get(contract).get(date);
+            double closePrice = lastBar.getClose();
+            int stocksToSell = (int) Math.floor((am.getOwnedStocks(contract) *
+                closePrice)/ split / closePrice);
+
+            double equilbratePrice = strategy.getEquilibratePrice(am, contract,
+                marketData, lastBar);
+            am.setResidualAssets(am.getResidualAssets() + equilbratePrice * stocksToSell);
+            am.setOwnedStocks(contract, am.getOwnedStocks(contract) - stocksToSell);
+          }
+        }
+
+        // Execute buy
+        Contract[] contractsToBuy = contracts.stream().filter(contract ->
+            marketData.get(contract).get(date).shouldBuy()).toArray(Contract[]::new);
+        int contractsBought = 0;
+        for (Contract contract : contractsToBuy) {
+          Bar bar = marketData.get(contract).get(date);
+          double buyPrice = strategy.getEntryPrice(am, contract, marketData, bar);
+          int stocksToBuy = (int) Math.floor((am.getResidualAssets()/
+              (contractsToBuy.length - contractsBought++))/buyPrice);
+
+          am.setResidualAssets(am.getResidualAssets() - buyPrice * stocksToBuy);
+          am.setOwnedStocks(contract, stocksToBuy);
+        }
+
+        // Post process bars
+        for (Contract contract : contracts)
+          strategy.postProcess(am, marketData, contract, marketData.get(contract).get(date));
+
+      }
+
+      marketDataReceiver.receive(marketData);
+    });
   }
 }
