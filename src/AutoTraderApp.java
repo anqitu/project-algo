@@ -21,6 +21,8 @@ public class AutoTraderApp {
   }
 
   public static void main(String[] args) {
+    AutoTrader autoTrader = new AutoTrader();
+//    autoTrader.run();
 
     StkContract nkeContract = new StkContract("NKE");
 
@@ -166,4 +168,5 @@ public class AutoTraderApp {
 
     Runtime.getRuntime().addShutdownHook(new Thread(autoTrader::shutdown));
   }
+
 }
