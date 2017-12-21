@@ -60,7 +60,7 @@ public class AutoTrader {
 
           @Override
           public void historicalData(com.ib.controller.Bar bar) {
-            historicalData.put(Utilities.formatDate(bar.time()), bar);
+            historicalData.put(LocalDate.ofEpochDay(bar.time()), bar);
           }
 
           @Override

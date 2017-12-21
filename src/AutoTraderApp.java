@@ -2,11 +2,8 @@ import com.ib.client.Contract;
 import com.ib.contracts.StkContract;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.Period;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
