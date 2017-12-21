@@ -2,10 +2,12 @@ import com.ib.client.Contract;
 import com.ib.contracts.StkContract;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 public class AutoTraderApp {
 
@@ -23,14 +25,18 @@ public class AutoTraderApp {
 //    autoTrader.run();
 
     StkContract nkeContract = new StkContract("NKE");
+    StkContract jnjContract = new StkContract("JNJ");
+    StkContract wmtContract = new StkContract("WMT");
 
     TradingConfig tradingConfig = new TradingConfig(0.1,
         1000000);
     tradingConfig.setStopLoss(nkeContract, 0.2);
+    tradingConfig.setStopLoss(jnjContract, 0.2);
+    tradingConfig.setStopLoss(wmtContract, 0.2);
 
-    autoTrader.runSimulation(
-        Arrays.asList(nkeContract), tradingConfig, 18,
-        58, new Strategy() {
+    ArrayList<Contract> contracts = new ArrayList<>(Arrays.asList(nkeContract, jnjContract, wmtContract));
+    autoTrader.runSimulation(contracts, tradingConfig, 5,
+        0, new Strategy() {
 
           Condition condition1 = ((contractMarketData, bar) ->
               bar.getProperty("20dma") > bar.getProperty("50dma"));
@@ -50,6 +56,9 @@ public class AutoTraderApp {
           @Override
           public Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
               Contract contract, com.ib.controller.Bar rawBar) {
+
+//            if (rawBar == null)
+//              rawBar = marketData.get(contract).lastEntry().getValue().getBar();
 
             Bar preparedBar = new Bar(rawBar);
 
@@ -119,7 +128,6 @@ public class AutoTraderApp {
               }
 
               if (shouldBuy) {
-                bar.setProperty("entry_price", bar.getHigh());
                 bar.setProperty("initial_stop_loss",
                     bar.getHigh() * (1 - tradingConfig.getStopLoss(contract)));
                 bar.setProperty("trailing_stop_loss", bar.getProperty("initial_stop_loss"));
@@ -134,34 +142,67 @@ public class AutoTraderApp {
           @Override
           public boolean shouldSell(AssetManager am, Contract contract,
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
-
-            double low = bar.getLow();
-            double trailingStopLoss = bar.getProperty("trailing_stop_loss");
-
-            boolean shouldSell = bar.getProperty("position") == 1 && low < trailingStopLoss;
-            if (shouldSell) {
-              bar.setProperty("stop_out", 1);
-              bar.setProperty("exit_price",
-                  Math.min(Math.min(low, trailingStopLoss), bar.getOpen()));
-            }
+            boolean shouldSell = bar.getProperty("position") == 1 &&
+                bar.getLow() < bar.getProperty("trailing_stop_loss");
+            bar.setProperty("stop_out", shouldSell ? 1 : 0);
             return shouldSell;
+          }
+
+          @Override
+          public boolean shouldEquilibrate(AssetManager am,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData) {
+            int split = (int) (am.getContracts().length + marketData.keySet().stream()
+                .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
+                am.getOwnedStocks(contract) == 0).count());
+
+            return split > am.getContracts().length &&
+                am.getResidualAssets() < am.getTotalAssetValue(marketData) / split;
+          }
+
+          @Override
+          public double getEquilibratePrice(AssetManager am, Contract contract,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
+            return bar.getLow();
+          }
+
+          @Override
+          public double getEntryPrice(AssetManager am, Contract contract,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
+            double entryPrice = bar.getHigh();
+            bar.setProperty("entry_price", entryPrice);
+            return entryPrice;
           }
 
           @Override
           public double getExitPrice(AssetManager am, Contract contract,
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
-            return bar.getProperty("exit_price");
+            double exitPrice = Math.min(Math.min(bar.getLow(),
+                bar.getProperty("trailing_stop_loss")), bar.getOpen());
+            bar.setProperty("exit_price", exitPrice);
+            return exitPrice;
           }
+
+          @Override
+          public void postProcess(AssetManager am,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
+              Contract contract, Bar bar) {
+            bar.setProperty("stocks_owned", am.getOwnedStocks(contract));
+            bar.setProperty("stock_value", am.getOwnedStocks(contract) * bar.getClose());
+            bar.setProperty("cash", am.getResidualAssets());
+            bar.setProperty("aum", am.getTotalAssetValue(marketData));
+          }
+
         }, marketData -> {
-          try {
-            autoTrader.exportHistoricalData(new String[]{"open", "high", "low", "close", "20dma",
-                    "50dma", "200dma", "criteria_1", "criteria_2", "criteria_3", "criteria_4",
-                    "all_4", "position", "entry_price", "initial_stop_loss",
-                "trailing_stop_loss", "stop_out", "exit_price", "aum", "stocks_owned"},
-                marketData.get(nkeContract), "sim.csv");
-          } catch (IOException e) {
-            e.printStackTrace();
-          }
+          for (Contract contract : contracts)
+            try {
+              autoTrader.exportHistoricalData(new String[]{"open", "high", "low", "close", "20dma",
+                      "50dma", "200dma", "criteria_1", "criteria_2", "criteria_3", "criteria_4",
+                      "all_4", "position", "entry_price", "initial_stop_loss",
+                      "trailing_stop_loss", "stop_out", "exit_price", "stocks_owned", "stock_value", "cash", "aum"},
+                  marketData.get(contract), contract.symbol() + ".csv");
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
         });
 
     Runtime.getRuntime().addShutdownHook(new Thread(autoTrader::shutdown));

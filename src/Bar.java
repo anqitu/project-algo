@@ -5,6 +5,8 @@ public class Bar {
 
   private LocalDate date;
   private com.ib.controller.Bar bar;
+  private boolean shouldBuy;
+  private boolean shouldSell;
 
   private HashMap<String, Double> properties;
 
@@ -16,6 +18,8 @@ public class Bar {
     properties.put("low", bar.low());
     properties.put("open", bar.open());
     properties.put("close", bar.close());
+    shouldBuy = false;
+    shouldSell = false;
   }
 
   public LocalDate getDate() {
@@ -40,6 +44,22 @@ public class Bar {
 
   public com.ib.controller.Bar getBar() {
     return bar;
+  }
+
+  public boolean shouldBuy() {
+    return shouldBuy;
+  }
+
+  public void setShouldBuy(boolean shouldBuy) {
+    this.shouldBuy = shouldBuy;
+  }
+
+  public boolean shouldSell() {
+    return shouldSell;
+  }
+
+  public void setShouldSell(boolean shouldSell) {
+    this.shouldSell = shouldSell;
   }
 
   public double getProperty(String key) {
