@@ -1,18 +1,13 @@
 import com.ib.client.Contract;
-import com.ib.client.ContractDetails;
-import com.ib.client.Order;
-import com.ib.client.OrderState;
-import com.ib.client.OrderStatus;
-import com.ib.client.Types.BarSize;
-import com.ib.client.Types.DurationUnit;
-import com.ib.client.Types.WhatToShow;
 import com.ib.contracts.StkContract;
-import com.ib.controller.ApiController;
-import com.ib.controller.ApiController.IHistoricalDataHandler;
-import com.ib.controller.ApiController.ILiveOrderHandler;
-import com.ib.controller.Bar;
+import java.io.IOException;
 import java.time.LocalDate;
+import java.time.Period;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 
 public class AutoTraderApp {
@@ -21,173 +16,154 @@ public class AutoTraderApp {
   private static final int port = 4002;
   private static final int clientId = 1;
 
-  private double stopLoss = 0.2;
-  private double movingAvgRange = 0.1;
-  private double assetUnderManagement = 1000000;
-  private TreeMap<LocalDate, Double> assets = new TreeMap<>();
-  private double stockOwned = 0;
+  interface Condition {
+    boolean fulfills(TreeMap<LocalDate, Bar> contractMarketData, Bar bar);
+  }
 
   public static void main(String[] args) {
 
-    ConnectionHandler connectionHandler = new ConnectionHandler();
+    StkContract nkeContract = new StkContract("NKE");
 
-    ApiController gateway = new ApiController(connectionHandler, s -> {
-    }, s -> {
-    });
-    gateway.connect(host, port, clientId, null);
-    connectionHandler.waitForConnection();
+    TradingConfig tradingConfig = new TradingConfig(0.1,
+        1000000);
+    tradingConfig.setStopLoss(nkeContract, 0.2);
 
-    //////////////////// ALGORITHM IMPLEMENTATION STARTS HERE //////////////////////////////////////
+    AutoTrader autoTrader = new AutoTrader(host, port, clientId);
+    autoTrader.runSimulation(
+        Arrays.asList(nkeContract), tradingConfig, 18,
+        58, new Strategy() {
 
-    //    TradeConfig tradeConfig = new TradeConfig();
-    //    tradeConfig.setStopLoss(0.2);
-    //    tradeConfig.setAssetUnderManagement(1000000);
-    //    tradeConfig.setMovingAvgRange(0.1);
+          Condition condition1 = ((contractMarketData, bar) ->
+              bar.getProperty("20dma") > bar.getProperty("50dma"));
 
-    //  private TreeMap<LocalDate, MovingAverageBar> historicalBars = new TreeMap<>();
-    //  private TreeMap<LocalDate, MovingAverageBar> realtimeBars = new TreeMap<>();
+          Condition condition2 = ((contractMarketData, bar) ->
+              bar.getProperty("20dma") > bar.getProperty("200dma"));
 
-    HashMap<Contract, Order> orders = new HashMap<>();
+          Condition condition3 = ((contractMarketData, bar) ->
+              bar.getProperty("50dma") > bar.getProperty("200dma"));
 
-    Contract nkeStock = new StkContract("NKE");
-
-    gateway.reqContractDetails(nkeStock, list -> {
-      System.out.println(list.size());
-      for (ContractDetails contractDetails : list) {
-        System.out.println(contractDetails);
-      }
-    });
-
-    gateway.reqHistoricalData(nkeStock, "", 1, DurationUnit.YEAR, BarSize._1_day,
-        WhatToShow.TRADES, true, false, new IHistoricalDataHandler() {
+          Condition condition4 = ((contractMarketData, bar) -> {
+            Bar lastEntry = contractMarketData.lastEntry().getValue();
+            return lastEntry.getOpen() > bar.getProperty("200dma") &&
+                lastEntry.getLow() > bar.getProperty("200dma");
+          });
 
           @Override
-          public void historicalData(Bar bar) {
-            System.out.println(bar);
-//            historicalBars.put(currentDate, new MovingAverageBar(bar.time(), bar.open(),
-//                bar.high(), bar.low(), bar.close(), bar.volume(), bar.count(), bar.wap()));
+          public Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
+              Contract contract, com.ib.controller.Bar rawBar) {
+
+            Bar preparedBar = new Bar(rawBar);
+
+            TreeMap<LocalDate, Bar> contractMarketData = marketData.get(contract);
+            int currentSize = contractMarketData.size();
+            if (currentSize >= 199) {
+
+              LocalDate[] contractMarketDates =
+                  contractMarketData.keySet().toArray(new LocalDate[currentSize]);
+              LocalDate dateAgo200 = contractMarketDates[currentSize - 199];
+              LocalDate dateAgo50 = contractMarketDates[currentSize - 49];
+              LocalDate dateAgo20 = contractMarketDates[currentSize - 19];
+
+              SortedMap<LocalDate, Bar> bars20 = marketData.get(contract).tailMap(dateAgo20,
+                  true);
+              double movingSum20 = bars20.entrySet().stream().mapToDouble(barEntry ->
+                  barEntry.getValue().getClose()).sum() + preparedBar.getClose();
+              preparedBar.setProperty("20dma", movingSum20 / 20);
+
+              SortedMap<LocalDate, Bar> bars50 = marketData.get(contract).tailMap(dateAgo50,
+                  true);
+              double movingSum50 = bars50.entrySet().stream().mapToDouble(barEntry ->
+                  barEntry.getValue().getClose()).sum() + preparedBar.getClose();;
+              preparedBar.setProperty("50dma", movingSum50 / 50);
+
+              SortedMap<LocalDate, Bar> bars200 = marketData.get(contract).tailMap(dateAgo200,
+                  true);
+              double movingSum200 = bars200.entrySet().stream().mapToDouble(barEntry ->
+                  barEntry.getValue().getClose()).sum() + preparedBar.getClose();;
+              preparedBar.setProperty("200dma", movingSum200 / 200);
+
+            }
+
+            return preparedBar;
           }
 
           @Override
-          public void historicalDataEnd() {
-            System.out.println("Received all historical data");
-            //    LocalDate startDate = Utilities.parseDate(startDateStr);
-            //    LocalDate date200 = startDate.plus(Period.ofDays(199));
-            //    SortedMap<LocalDate, MovingAverageBar> barsAfter200Days =
-            //        historicalBars.tailMap(date200, true);
-            //
-            //    // Start simulation from the 200th day
-            //    for(Map.Entry<LocalDate, MovingAverageBar> entry : barsAfter200Days.entrySet()) {
-            //
-            //      // Simulate receiving of realtime bars
-            //      MovingAverageBar bar = entry.getValue();
-            //      realtimeBar(reqId, entry.getKey().toEpochDay(), bar.open(),
-            //              bar.high(), bar.low(), bar.close(), bar.volume(), bar.wap(), bar.count());
-            //    }
+          public boolean shouldBuy(AssetManager am, Contract contract,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
+
+            TreeMap<LocalDate, Bar> contractMarketData = marketData.get(contract);
+
+            if (contractMarketData.size() > 1) {
+              Bar previous = contractMarketData.lowerEntry(bar.getDate()).getValue();
+
+              String[] criteria = new String[]{"criteria_1", "criteria_2", "criteria_3",
+                  "criteria_4"};
+              bar.setProperty(criteria[0], condition1.fulfills(contractMarketData, bar) ? 1 : 0);
+              bar.setProperty(criteria[1], condition2.fulfills(contractMarketData, bar) ? 1 : 0);
+              bar.setProperty(criteria[2], condition3.fulfills(contractMarketData, bar) ? 1 : 0);
+              bar.setProperty(criteria[3], condition4.fulfills(contractMarketData, bar) ? 1 : 0);
+              bar.setProperty("all_4", Arrays.stream(criteria).mapToDouble(bar::getProperty).sum()
+                  == 4 ? 1 : 0);
+
+              boolean previousPosition = previous.getProperty("position") == 1;
+              boolean shouldBuy = !previousPosition && previous.getProperty("all_4") == 0 &&
+                  bar.getProperty("all_4") == 1;
+              bar.setProperty("position", shouldBuy ? 1 : (previousPosition ? 1 : 0));
+
+              if (previousPosition) {
+                bar.setProperty("entry_price", previous.getProperty("entry_price"));
+                bar.setProperty("initial_stop_loss", previous.getProperty("initial_stop_loss"));
+                bar.setProperty("trailing_stop_loss",
+                    Math.max(previous.getProperty("trailing_stop_loss"),
+                        (1 - tradingConfig.getStopLoss(contract)) * bar.getClose()));
+              }
+
+              if (shouldBuy) {
+                bar.setProperty("entry_price", bar.getHigh());
+                bar.setProperty("initial_stop_loss",
+                    bar.getHigh() * (1 - tradingConfig.getStopLoss(contract)));
+                bar.setProperty("trailing_stop_loss", bar.getProperty("initial_stop_loss"));
+              }
+
+              return shouldBuy;
+            }
+
+            return false;
+          }
+
+          @Override
+          public boolean shouldSell(AssetManager am, Contract contract,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
+
+            double low = bar.getLow();
+            double trailingStopLoss = bar.getProperty("traling_stop_loss");
+
+            boolean shouldSell = bar.getProperty("position") == 1 && low < trailingStopLoss;
+            if (shouldSell) {
+              bar.setProperty("stop_out", 1);
+              bar.setProperty("exit_price",
+                  Math.min(Math.min(low, trailingStopLoss), bar.getOpen()));
+            }
+            return shouldSell;
+          }
+
+          @Override
+          public double getExitPrice(AssetManager am, Contract contract,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
+            return bar.getProperty("exit_price");
+          }
+        }, marketData -> {
+          try {
+            autoTrader.exportHistoricalData(new String[]{"open", "high", "low", "close", "20dma",
+                    "50dma", "200dma", "criteria_1", "criteria_2", "criteria_3", "criteria_4",
+                    "all_4", "position", "entry_price", "initial_stop_loss",
+                "trailing_stop_loss", "stop_out", "exit_price", "aum", "stocks_owned"},
+                marketData.get(nkeContract), "sim.csv");
+          } catch (IOException e) {
+            e.printStackTrace();
           }
         });
 
-    gateway.reqRealTimeBars(nkeStock, WhatToShow.TRADES, true, bar -> {
-
-      // Parse dates
-      //    LocalDate barDate = Instant.ofEpochMilli(time)
-      //        .atZone(ZoneId.systemDefault()).toLocalDate();
-      //    LocalDate dateAgo200 = barDate.minus(Period.ofDays(199));
-      //    LocalDate dateAgo50 = barDate.minus(Period.ofDays(49));
-      //    LocalDate dateAgo20 = barDate.minus(Period.ofDays(19));
-      //
-      //    // Calculate moving sums
-      //    SortedMap<LocalDate, MovingAverageBar> bars20 = realtimeBars.tailMap(dateAgo20, true);
-      //    double movingSum20 = bars20.entrySet().stream()
-      //        .mapToDouble(bar -> bar.getValue().close()).sum();
-      //
-      //    SortedMap<LocalDate, MovingAverageBar> bars50 = realtimeBars.tailMap(dateAgo50, true);
-      //    double movingSum50 = bars50.entrySet().stream()
-      //        .mapToDouble(bar -> bar.getValue().close()).sum();
-      //
-      //    SortedMap<LocalDate, MovingAverageBar> bars200 = realtimeBars.tailMap(dateAgo200, true);
-      //    double movingSum200 = bars200.entrySet().stream()
-      //        .mapToDouble(bar -> bar.getValue().close()).sum();
-      //
-      //    // Add bar to list
-      //    realtimeBars.put(barDate, new MovingAverageBar(Utilities.formatDate(barDate),
-      //        open, high, low, close, volume, count, wap, movingSum20/20,
-      //        movingSum50/50, movingSum200/200));
-      //
-      //    // If there is an active order already, update trailing stop loss if necessary
-      //    if (currentOrder != null)
-      //      clientSocket.reqOpenOrders();
-      //
-      //    // If there is no active order, buy when all 4 conditions are met
-      //    else if (movingSum20 > movingSum50 && movingSum50 > movingSum200 && open > movingSum200 && low > movingSum200){
-      //      sendMarketOrder("BUY", tradeConfig.getAssetUnderManagement()/high);
-      //
-      //      // TODO: Might need to check the status of the order to ensure it is successfully submitted
-      ////    tradeConfig.setAssetUnderManagement(order.totalQuantity() * realtimeBars.lastEntry().getValue().close());
-      ////    tradeConfig.addAssets(realtimeBars.lastKey(), tradeConfig.getAssetUnderManagement());
-      //
-      //    }
-      //
-      //    // Update AUM
-      //    clientSocket.reqAccountSummary(currentReqId++, "All", "NetLiquidation");
-    });
-
-    //    gateway.placeOrModifyOrder();
-    //    currentOrder = new Order();
-    //    currentOrder.action(action);
-    //    currentOrder.orderId(currentOrderId);
-    //    currentOrder.orderType("TRAIL LIMIT");
-    //    currentOrder.totalQuantity(quantity);
-    //    currentOrder.account(connectionConfig.getAccount());
-    //    currentOrder.trailStopPrice(realtimeBars.lastEntry().getValue().close() * (1 - tradeConfig.getStopLoss()));
-    //    clientSocket.placeOrder(currentOrderId++, contract, currentOrder);
-
-    gateway.reqLiveOrders(new ILiveOrderHandler() {
-
-      @Override
-      public void openOrder(Contract contract, Order order, OrderState orderState) {
-        //    System.out.println("OpenOrder. ID: "+order.orderId()+", "+contract.symbol()+", "+contract.secType()+" @ "
-        //        +contract.exchange()+": "+ order.action()+", "+order.orderType()+" "
-        //        +order.totalQuantity()+", "+orderState.status());
-        //
-        //    // Not sure if need to update AUM manually or via accountSummary()
-        //
-        //    //tradeConfig.setAssetUnderManagement(order.totalQuantity() * realtimeBars.lastEntry().getValue().close());
-        //    //tradeConfig.addAssets(realtimeBars.lastKey(), tradeConfig.getAssetUnderManagement());
-        //
-        //    // Update trailing stop loss if current trailing price is smaller than the new one
-        //
-        //    double todayClosePrice = realtimeBars.lastEntry().getValue().close() * (1 - tradeConfig.getStopLoss());
-        //    if (order.trailStopPrice() < todayClosePrice)
-        //      currentOrder.trailStopPrice(todayClosePrice);
-      }
-
-      @Override
-      public void openOrderEnd() {
-
-      }
-
-      @Override
-      public void orderStatus(int i, OrderStatus orderStatus, double v, double v1, double v2,
-          long l,
-          int i1, double v3, int i2, String s, double v4) {
-
-      }
-
-      @Override
-      public void handle(int i, int i1, String s) {
-
-      }
-    });
-
-    // gateway.reqAccountSummary();
-    //    if (s1.equals("NetLiquidation")) {
-    //      tradeConfig.setAssetUnderManagement(Double.parseDouble(s2));
-    //      tradeConfig.addAssets(realtimeBars.lastKey(), tradeConfig.getAssetUnderManagement());
-    //    }
-
-    // END
-
-    Runtime.getRuntime().addShutdownHook(new Thread(gateway::disconnect));
+    Runtime.getRuntime().addShutdownHook(new Thread(autoTrader::shutdown));
   }
 }

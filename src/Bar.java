@@ -1,17 +1,53 @@
-import com.ib.controller.Bar;
+import java.time.LocalDate;
 import java.util.HashMap;
 
-public class AutoBar {
+public class Bar {
 
-  private Bar bar;
-  private HashMap<Integer, ou>
+  private LocalDate date;
+  private com.ib.controller.Bar bar;
 
-  public AutoBar(long time, double high, double low, double open, double close, double wap,
-      long volume, int count) {
-    this.bar = new Bar(time, high, low, open, close, wap, volume, count);
+  private HashMap<String, Double> properties;
+
+  public Bar(com.ib.controller.Bar bar) {
+    date = LocalDate.ofEpochDay(bar.time());
+    this.bar = bar;
+    properties = new HashMap<>();
+    properties.put("high", bar.high());
+    properties.put("low", bar.low());
+    properties.put("open", bar.open());
+    properties.put("close", bar.close());
   }
 
+  public LocalDate getDate() {
+    return date;
+  }
 
+  public double getHigh() {
+    return bar.high();
+  }
 
+  public double getLow() {
+    return bar.low();
+  }
+
+  public double getOpen() {
+    return bar.open();
+  }
+
+  public double getClose() {
+    return bar.close();
+  }
+
+  public com.ib.controller.Bar getBar() {
+    return bar;
+  }
+
+  public double getProperty(String key) {
+    return properties.containsKey(key) ? properties.get(key) : 0;
+  }
+
+  public void setProperty(String key, double value) {
+    properties.put(key, value);
+  }
 
 }
