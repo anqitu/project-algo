@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class AutoTraderApp {
 
@@ -24,9 +25,20 @@ public class AutoTraderApp {
     AutoTrader autoTrader = new AutoTrader(host, port, clientId);
 //    autoTrader.run();
 
-    StkContract nkeContract = new StkContract("NKE");
-    StkContract jnjContract = new StkContract("JNJ");
-    StkContract wmtContract = new StkContract("WMT");
+    ArrayList<Contract> contracts = new ArrayList<>();
+
+//    SPX LIST
+//    String spxFile = "spx.txt";
+//    Path spxFilePath = FileSystems.getDefault().getPath(spxFile);
+//    try {
+//      contracts.addAll(Files.lines(spxFilePath, StandardCharsets.UTF_8).map(StkContract::new)
+//          .collect(Collectors.toCollection(ArrayList::new)));
+//    } catch (IOException e) { e.printStackTrace(); }
+
+
+    contracts.addAll(Stream.of("JNJ", "NKE", "WMT", "AAPL").map(StkContract::new).collect(
+        Collectors.toCollection(ArrayList::new)));
+
 //    EXPORT HISTORICAL DATA TO CSV
 //    autoTrader.getHistoricalData(contracts, 10, marketData -> {
 //      for (Contract contract : contracts)
@@ -37,13 +49,13 @@ public class AutoTraderApp {
 //        }
 //    });
 
+    ///////////////////////////////// EXECUTE SIMULATION ///////////////////////////////////////////
+
     TradingConfig tradingConfig = new TradingConfig(0.1,
         1000000);
-    tradingConfig.setStopLoss(nkeContract, 0.2);
-    tradingConfig.setStopLoss(jnjContract, 0.2);
-    tradingConfig.setStopLoss(wmtContract, 0.2);
+    for (Contract contract : contracts)
+      tradingConfig.setStopLoss(contract, 0.2);
 
-    ArrayList<Contract> contracts = new ArrayList<>(Arrays.asList(nkeContract, jnjContract, wmtContract));
     autoTrader.runSimulation(contracts, tradingConfig, 17, new Strategy() {
 
           Condition condition1 = ((contractMarketData, bar) ->
