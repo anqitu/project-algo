@@ -44,14 +44,17 @@ interface Strategy {
   double getExitPrice(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
 
-  double getEquilibratePrice(AssetManager am, Contract contract,
+  double getSellPriceOnRebalance(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
 
   double getEntryPrice(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
 
-  boolean shouldEquilibrate(AssetManager am,
-      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData);
+  boolean shouldRebalance(AssetManager am,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split);
+
+  int getStocksToSellOnRebalance(AssetManager am, Contract contract, Bar bar,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split);
 
   void postProcess(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
       Contract contract, Bar bar);
@@ -205,19 +208,20 @@ public class AutoTrader {
           }
         }
 
-        if (strategy.shouldEquilibrate(am, marketData)) {
+        int split = (int) (am.getContracts().length + marketData.keySet().stream()
+            .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
+                am.getOwnedStocks(contract) == 0).count());
+
+        // Rebalance
+        if (strategy.shouldRebalance(am, marketData, split)) {
           Contract[] activeContracts = am.getContracts();
-          int split = (int) (am.getContracts().length + marketData.keySet().stream()
-              .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
-                  am.getOwnedStocks(contract) == 0).count());
 
           for (Contract contract : activeContracts) {
             Bar lastBar = marketData.get(contract).get(date);
-            double closePrice = lastBar.getClose();
-            int stocksToSell = (int) Math.floor((am.getOwnedStocks(contract) *
-                closePrice)/ split / closePrice);
+            int stocksToSell = strategy.getStocksToSellOnRebalance(am, contract, lastBar,
+                marketData, split);
 
-            double equilbratePrice = strategy.getEquilibratePrice(am, contract,
+            double equilbratePrice = strategy.getSellPriceOnRebalance(am, contract,
                 marketData, lastBar);
             am.setResidualAssets(am.getResidualAssets() + equilbratePrice * stocksToSell);
             am.setOwnedStocks(contract, am.getOwnedStocks(contract) - stocksToSell);

@@ -157,20 +157,28 @@ public class AutoTraderApp {
           }
 
           @Override
-          public boolean shouldEquilibrate(AssetManager am,
-              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData) {
-            int split = (int) (am.getContracts().length + marketData.keySet().stream()
-                .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
-                am.getOwnedStocks(contract) == 0).count());
-
+          public boolean shouldRebalance(AssetManager am,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split) {
             return split > am.getContracts().length &&
                 am.getResidualAssets() < am.getTotalAssetValue(marketData) / split;
           }
 
           @Override
-          public double getEquilibratePrice(AssetManager am, Contract contract,
+          public double getSellPriceOnRebalance(AssetManager am, Contract contract,
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
             return bar.getLow();
+          }
+
+          @Override
+          public int getStocksToSellOnRebalance(AssetManager am, Contract contract, Bar bar,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split) {
+
+//            double splitRatio = 1 - (am.getContracts().length / split);
+//            return (int) Math.floor(am.getOwnedStocks(contract) * splitRatio);
+
+            double closePrice = bar.getClose();
+            return (int) Math.floor((am.getOwnedStocks(contract) *
+                closePrice)/ split / closePrice);
           }
 
           @Override
