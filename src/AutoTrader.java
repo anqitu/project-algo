@@ -128,17 +128,37 @@ public class AutoTrader {
     }
   }
 
-  public void exportHistoricalData(String[] columns, TreeMap<LocalDate, Bar> marketData,
-      String fileName) throws IOException {
+  public void exportData(TreeMap<LocalDate, Bar> marketData, String fileName,
+      String[] columns) throws IOException {
 
     StringBuilder stringBuilder = new StringBuilder();
     stringBuilder.append("date," + String.join(",", columns) + "\n");
     for (Entry<LocalDate, Bar> barEntry : marketData.entrySet()) {
       Bar bar = barEntry.getValue();
-      stringBuilder.append(barEntry.getValue().getBar().formattedTime().split(" ")[0] + ",");
+      stringBuilder.append(bar.getBar().formattedTime().split(" ")[0] + ",");
       for (String column : columns)
         stringBuilder.append(bar.getProperty(column) + ",");
       stringBuilder.append("\n");
+    }
+
+    PrintWriter printWriter = new PrintWriter(new File(fileName));
+    printWriter.write(stringBuilder.toString());
+    printWriter.close();
+    System.out.println(String.format("Saved file: %s", fileName));
+  }
+
+  public void exportData(TreeMap<LocalDate, com.ib.controller.Bar> marketData, String fileName)
+      throws IOException {
+    StringBuilder stringBuilder = new StringBuilder();
+    stringBuilder.append(String.join(",",
+        new String[] {"date", "open", "high", "low", "close"}) + "\n");
+    for (Entry<LocalDate, com.ib.controller.Bar> barEntry : marketData.entrySet()) {
+      com.ib.controller.Bar bar = barEntry.getValue();
+      stringBuilder.append(String.join(",",
+          new String[] {bar.formattedTime().split(" ")[0],
+              String.valueOf(bar.open()),
+              String.valueOf(bar.high()), String.valueOf(bar.low()),
+              String.valueOf(bar.close())}) + "\n");
     }
 
     PrintWriter printWriter = new PrintWriter(new File(fileName));

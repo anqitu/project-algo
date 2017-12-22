@@ -27,6 +27,15 @@ public class AutoTraderApp {
     StkContract nkeContract = new StkContract("NKE");
     StkContract jnjContract = new StkContract("JNJ");
     StkContract wmtContract = new StkContract("WMT");
+//    EXPORT HISTORICAL DATA TO CSV
+//    autoTrader.getHistoricalData(contracts, 10, marketData -> {
+//      for (Contract contract : contracts)
+//        try {
+//          autoTrader.exportData(marketData.get(contract), contract.symbol() + ".csv");
+//        } catch (IOException e) {
+//          e.printStackTrace();
+//        }
+//    });
 
     TradingConfig tradingConfig = new TradingConfig(0.1,
         1000000);
@@ -194,11 +203,12 @@ public class AutoTraderApp {
         }, marketData -> {
           for (Contract contract : contracts)
             try {
-              autoTrader.exportHistoricalData(new String[]{"open", "high", "low", "close", "20dma",
+              autoTrader.exportData(marketData.get(contract), contract.symbol() + ".csv",
+                  new String[]{"open", "high", "low", "close", "20dma",
                       "50dma", "200dma", "criteria_1", "criteria_2", "criteria_3", "criteria_4",
                       "all_4", "position", "entry_price", "initial_stop_loss",
-                      "trailing_stop_loss", "stop_out", "exit_price", "stocks_owned", "stock_value", "cash", "aum"},
-                  marketData.get(contract), contract.symbol() + ".csv");
+                      "trailing_stop_loss", "stop_out", "exit_price", "stocks_owned",
+                      "stock_value", "cash", "aum"});
             } catch (IOException e) {
               e.printStackTrace();
             }
