@@ -1,4 +1,5 @@
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 
 public class Bar {
@@ -11,7 +12,8 @@ public class Bar {
   private HashMap<String, Double> properties;
 
   public Bar(com.ib.controller.Bar bar) {
-    date = LocalDate.ofEpochDay(bar.time());
+    this.date = LocalDate.parse(bar.formattedTime(),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     this.bar = bar;
     properties = new HashMap<>();
     properties.put("high", bar.high());

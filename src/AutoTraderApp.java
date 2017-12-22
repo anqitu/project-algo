@@ -35,8 +35,7 @@ public class AutoTraderApp {
     tradingConfig.setStopLoss(wmtContract, 0.2);
 
     ArrayList<Contract> contracts = new ArrayList<>(Arrays.asList(nkeContract, jnjContract, wmtContract));
-    autoTrader.runSimulation(contracts, tradingConfig, 5,
-        0, new Strategy() {
+    autoTrader.runSimulation(contracts, tradingConfig, 17, new Strategy() {
 
           Condition condition1 = ((contractMarketData, bar) ->
               bar.getProperty("20dma") > bar.getProperty("50dma"));

@@ -9,11 +9,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoField;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
+import java.util.TreeSet;
 
 interface MarketDataReceiver {
   void receive(HashMap<Contract, TreeMap<LocalDate, Bar>> marketData);
@@ -81,7 +84,8 @@ public class AutoTrader {
 
           @Override
           public void historicalData(com.ib.controller.Bar bar) {
-            historicalData.put(LocalDate.ofEpochDay(bar.time()), bar);
+            historicalData.put(LocalDate.parse(bar.formattedTime(),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), bar);
           }
 
           @Override
@@ -144,34 +148,27 @@ public class AutoTrader {
   }
 
   public void runSimulation(List<Contract> contracts, TradingConfig config, int years,
-      int offsetDays, Strategy strategy, MarketDataReceiver marketDataReceiver) {
+      Strategy strategy, MarketDataReceiver marketDataReceiver) {
 
     System.out.println("Fetching historical data...");
     getHistoricalData(contracts, years, historicalMarketData -> {
 
-      for (Contract contract : contracts) {
-        System.out.println(contract.symbol() + " " + historicalMarketData.get(contract).firstEntry().getValue().formattedTime());
-      }
-
       System.out.println("Simulation started!");
       AssetManager am = new AssetManager(config.getAssetUnderManagement());
+      TreeSet<LocalDate> dates = new TreeSet<>();
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData = new HashMap<>();
 
-      // Assuming all contracts have the same available dates
-      TreeMap<LocalDate, com.ib.controller.Bar> contractHistoricalData =
-          historicalMarketData.get(contracts.get(0));
-      LocalDate offset = contractHistoricalData.keySet().
-          toArray(new LocalDate[contractHistoricalData.size()])[offsetDays];
-
-      for (Contract contract : contracts)
+      for (Contract contract : contracts) {
         marketData.put(contract, new TreeMap<>());
+        dates.addAll(historicalMarketData.get(contract).keySet());
+      }
 
-      for (LocalDate date : contractHistoricalData.tailMap(offset).keySet()) {
+      for (LocalDate date : dates) {
 
         // Prepare market bars
         for (Contract contract : contracts) {
-          contractHistoricalData = historicalMarketData.get(contract);
-          Bar bar = strategy.prepare(am, marketData, contract, contractHistoricalData.get(date));
+          Bar bar = strategy.prepare(am, marketData, contract,
+              historicalMarketData.get(contract).get(date), date);
           marketData.get(contract).put(date, bar);
         }
 
