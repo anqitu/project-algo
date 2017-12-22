@@ -63,10 +63,12 @@ public class AutoTraderApp {
 
           @Override
           public Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
-              Contract contract, com.ib.controller.Bar rawBar) {
+              Contract contract, com.ib.controller.Bar rawBar, LocalDate date) {
 
-//            if (rawBar == null)
-//              rawBar = marketData.get(contract).lastEntry().getValue().getBar();
+            if (rawBar == null) {
+              System.out.println("Missing: " + contract.symbol() + " " + date);
+              rawBar = marketData.get(contract).lastEntry().getValue().getBar();
+            }
 
             Bar preparedBar = new Bar(rawBar);
 

@@ -15,7 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TreeMap;
-import java.util.concurrent.Semaphore;
 import java.util.TreeSet;
 
 interface MarketDataReceiver {
@@ -33,7 +32,7 @@ interface HistoricalMarketDataReceiver {
 interface Strategy {
 
   Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
-      Contract contract, com.ib.controller.Bar bar);
+      Contract contract, com.ib.controller.Bar bar, LocalDate date);
 
   boolean shouldBuy(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
