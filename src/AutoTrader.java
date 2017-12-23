@@ -46,14 +46,16 @@ interface Strategy {
   double getSellPriceOnRebalance(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
 
+  double getRequiredTotalCashOnRebalance(AssetManager am,
+      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split);
+
   double getEntryPrice(AssetManager am, Contract contract,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar);
 
   boolean shouldRebalance(AssetManager am,
       HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split);
 
-  int getStocksToSellOnRebalance(AssetManager am, Contract contract, Bar bar,
-      HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split);
+  int getStocksToSellOnRebalance(Bar bar, double requiredIndividualCash);
 
   void postProcess(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
       Contract contract, Bar bar);
@@ -194,7 +196,7 @@ public class AutoTrader {
           marketData.get(contract).put(date, bar);
         }
 
-        // Determine action and execute sell if needed
+        // Determine action and execute sell first if needed
         for (Contract contract : contracts) {
           Bar bar = marketData.get(contract).get(date);
           bar.setShouldBuy(strategy.shouldBuy(am, contract, marketData, bar));
@@ -207,18 +209,23 @@ public class AutoTrader {
           }
         }
 
+        // Number of contracts supposed to be owned for today =
+        // currently active contracts + newly shouldBuy contracts
         int split = (int) (am.getContracts().length + marketData.keySet().stream()
             .filter(contract -> marketData.get(contract).lastEntry().getValue().shouldBuy() &&
                 am.getOwnedStocks(contract) == 0).count());
 
+
         // Rebalance
         if (strategy.shouldRebalance(am, marketData, split)) {
+
+          double requiredTotalCash = strategy.getRequiredTotalCashOnRebalance(am, marketData, split);
+          double requiredIndividualCash = requiredTotalCash / am.getContracts().length;
           Contract[] activeContracts = am.getContracts();
 
           for (Contract contract : activeContracts) {
             Bar lastBar = marketData.get(contract).get(date);
-            int stocksToSell = strategy.getStocksToSellOnRebalance(am, contract, lastBar,
-                marketData, split);
+            int stocksToSell = strategy.getStocksToSellOnRebalance(lastBar,requiredIndividualCash);
 
             double equilbratePrice = strategy.getSellPriceOnRebalance(am, contract,
                 marketData, lastBar);

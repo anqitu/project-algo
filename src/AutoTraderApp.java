@@ -170,11 +170,20 @@ public class AutoTraderApp {
             return shouldSell;
           }
 
+
           @Override
+          // Need to rebalance when residual cash < AUM / split * (split - currentlyOwnedStocks)
           public boolean shouldRebalance(AssetManager am,
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split) {
-            return split > am.getContracts().length &&
-                am.getResidualAssets() < am.getTotalAssetValue(marketData) / split;
+            return am.getResidualAssets() <
+                am.getTotalAssetValue(marketData) / split * (split - am.getContracts().length);
+          }
+
+          @Override
+          public double getRequiredTotalCashOnRebalance(AssetManager am,
+              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split){
+            return am.getTotalAssetValue(marketData) / split * (split - am.getContracts().length) -
+                am.getResidualAssets();
           }
 
           @Override
@@ -184,15 +193,9 @@ public class AutoTraderApp {
           }
 
           @Override
-          public int getStocksToSellOnRebalance(AssetManager am, Contract contract, Bar bar,
-              HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, int split) {
-
-//            double splitRatio = 1 - (am.getContracts().length / split);
-//            return (int) Math.floor(am.getOwnedStocks(contract) * splitRatio);
-
-            double closePrice = bar.getClose();
-            return (int) Math.floor((am.getOwnedStocks(contract) *
-                closePrice)/ split / closePrice);
+          // StocksToSellOnRebalance = requiredIndividualCash / low
+          public int getStocksToSellOnRebalance(Bar bar, double requiredIndividualCash) {
+            return (int) Math.floor((requiredIndividualCash / bar.getLow()));
           }
 
           @Override
