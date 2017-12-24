@@ -1,4 +1,3 @@
-import com.ib.client.Contract;
 import java.util.HashMap;
 
 public class TradingConfig {

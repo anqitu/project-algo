@@ -1,17 +1,19 @@
-import com.ib.client.Contract;
+import com.ib.client.ContractDetails;
 import com.ib.client.Types.BarSize;
 import com.ib.client.Types.DurationUnit;
 import com.ib.client.Types.WhatToShow;
 import com.ib.controller.ApiConnection.ILogger;
 import com.ib.controller.ApiController;
+import com.ib.controller.ApiController.IContractDetailsHandler;
 import com.ib.controller.ApiController.IHistoricalDataHandler;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoField;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.TreeMap;
@@ -28,6 +30,18 @@ interface HistoricalContractMarketDataReceiver {
 interface HistoricalMarketDataReceiver {
   void receive(HashMap<Contract, TreeMap<LocalDate, com.ib.controller.Bar>> marketData);
 }
+
+interface ContractDetailsReceiver {
+  void receive(List<ContractDetails> contractDetails);
+}
+
+interface ContractsDetailsReceiver {
+  void receive(HashMap<Contract, ContractDetails> contractsDetails);
+}
+
+
+
+
 
 interface Strategy {
 
@@ -82,8 +96,8 @@ public class AutoTrader {
     TreeMap<LocalDate, com.ib.controller.Bar> historicalData = new TreeMap<>();
 
     System.out.println(String.format("Requesting (%d) years worth of daily historical data for %s",
-        years, contract.symbol()));
-    gateway.reqHistoricalData(contract, "", years, DurationUnit.YEAR, BarSize._1_day,
+        years, contract.getProperty(ContractAttribute.CONTRACT_SYMBOL)));
+    gateway.reqHistoricalData(contract.getContract(), "", years, DurationUnit.YEAR, BarSize._1_day,
         WhatToShow.ADJUSTED_LAST, true, false, new IHistoricalDataHandler() {
 
           @Override
@@ -94,7 +108,7 @@ public class AutoTrader {
 
           @Override
           public void historicalDataEnd() {
-            System.out.println("Received data for " + contract.symbol());
+            System.out.println("Received data for " + contract.getProperty(ContractAttribute.CONTRACT_SYMBOL));
             marketDataReceiver.receive(historicalData);
           }
         });
@@ -256,5 +270,30 @@ public class AutoTrader {
 
       marketDataReceiver.receive(marketData);
     });
+  }
+
+  public void getContractDetails (Contract contract, ContractDetailsReceiver contractDetailsReceiver ){
+
+      gateway.reqContractDetails(contract.getContract(), new IContractDetailsHandler() {
+        @Override
+        public void contractDetails(List<ContractDetails> list) {
+          contractDetailsReceiver.receive(list);
+        }
+      });
+  }
+
+  public void getContractsDetails (List<Contract> contracts, ContractsDetailsReceiver contractsDetailsReceiver ){
+    HashMap<Contract, ContractDetails> contractsDetails = new HashMap<>();
+    for (Contract contract : contracts) {
+      getContractDetails(contract, new ContractDetailsReceiver() {
+        @Override
+        public void receive(List<ContractDetails> contractDetails) {
+          contractsDetails.put(contract, contractDetails.get(0));
+          if (contracts.size() == contractDetails.size()){
+            contractsDetailsReceiver.receive(contractsDetails);
+          }
+        }
+      });
+    }
   }
 }
