@@ -144,12 +144,7 @@ public class Contract implements ExportableToCSV, ExportableToDB {
   }
 
   public Contract copy() {
-    Contract copy =  new Contract();
-    copy.setSymbol(symbol);
-    copy.setSecType(secType);
-    copy.setCompanyName(companyName);
-    copy.setIndustry(industry);
-    copy.setCategory(category);
+    Contract copy =  new Contract(symbol, secType, companyName, industry, category);
     return copy;
   }
 

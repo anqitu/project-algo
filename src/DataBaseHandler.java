@@ -164,7 +164,7 @@ public class DataBaseHandler {
     return contracts;
   }
 
-  public HashMap<String, LocalDate> getEarliestBarDate(){
+  public HashMap<String, LocalDate> getFirstBarDate(){
     HashMap<String, LocalDate> contractEarliestBarDates = new HashMap<>();
     try{
       Statement statement = connection.createStatement();
@@ -177,7 +177,40 @@ public class DataBaseHandler {
     } catch (Exception e){
       e.printStackTrace();
     }
-    System.out.println("Finished reading contract earliest bar date information");
+    System.out.println("Finished reading contract first bar date information");
     return contractEarliestBarDates;
+  }
+
+  public HashMap<String, LocalDate> getLastBarDate(){
+    HashMap<String, LocalDate> contractLastBarDates = new HashMap<>();
+    try{
+      Statement statement = connection.createStatement();
+      String query = "SELECT MAX(date), symbol FROM Bar GROUP BY symbol";
+      ResultSet resultSet = statement.executeQuery(query);
+      while (resultSet.next()){
+        contractLastBarDates.put(resultSet.getString("symbol"),
+            LocalDate.parse(resultSet.getString(1), DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+      }
+    } catch (Exception e){
+      e.printStackTrace();
+    }
+    System.out.println("Finished reading contract last bar date information");
+    return contractLastBarDates;
+  }
+
+  public ArrayList<LocalDate> getAllDates() {
+    ArrayList<LocalDate> dates = new ArrayList<>();
+    try{
+      Statement statement = connection.createStatement();
+      String query = "SELECT DISTINCT date FROM Bar";
+      ResultSet resultSet = statement.executeQuery(query);
+      while (resultSet.next()){
+        dates.add(LocalDate.parse(resultSet.getString(1), DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+      }
+    } catch (Exception e){
+      e.printStackTrace();
+    }
+    System.out.println("Finished reading all dates information");
+    return dates;
   }
 }

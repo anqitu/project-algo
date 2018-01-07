@@ -176,14 +176,7 @@ public class Bar implements ExportableToCSV, ExportableToDB {
 //  }
 
   public Bar copy() {
-    Bar clone = new Bar();
-    clone.setDate(date);
-    clone.setSymbol(symbol);
-    clone.setOpen(open);
-    clone.setHigh(high);
-    clone.setLow(low);
-    clone.setClose(close);
-    clone.setProperties(properties);
+    Bar clone = new Bar(date, symbol, open, high, low, close);
     return clone;
   }
 
