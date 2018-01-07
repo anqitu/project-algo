@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 public class DataBaseHandler {
@@ -198,8 +199,8 @@ public class DataBaseHandler {
     return contractLastBarDates;
   }
 
-  public ArrayList<LocalDate> getAllDates() {
-    ArrayList<LocalDate> dates = new ArrayList<>();
+  public TreeSet<LocalDate> getAllDates() {
+    TreeSet<LocalDate> dates = new TreeSet<>();
     try{
       Statement statement = connection.createStatement();
       String query = "SELECT DISTINCT date FROM Bar";

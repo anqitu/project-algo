@@ -70,7 +70,7 @@ public class AutoTraderApp {
         1000000);
     // Set stop loss
     for (Contract contract : contracts) {
-      tradingConfig.setStopLoss(contract, 0.2);
+      tradingConfig.setStopLoss(contract, 0.15);
     }
 
 
@@ -304,14 +304,14 @@ public class AutoTraderApp {
 
           @Override
           public Bar prepare(AssetManager am, HashMap<Contract, TreeMap<LocalDate, Bar>> marketData,
-              Contract contract, Bar historicalBar) {
+              Contract contract, Bar historicalBar, LocalDate date) {
 
             Bar preparedBar = null;
 
             // If today has missing data, we assume to use yesterday's data.
             if (historicalBar == null) {
               preparedBar = marketData.get(contract).lastEntry().getValue().copy();
-              preparedBar.setDate(preparedBar.getDate().plusDays(1));
+              preparedBar.setDate(date);
               System.out.println("Missing: " + contract.getSymbol() + " " + preparedBar.getDate());
             } else {
               preparedBar = historicalBar.copy();
