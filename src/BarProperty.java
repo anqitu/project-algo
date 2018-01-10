@@ -8,10 +8,10 @@ public class BarProperty implements ExportableToDB {
   private String symbol;
   private LocalDate date;
   private String propertyName;
-  private String propertyValue;
+  private Double propertyValue;
 
   public BarProperty(String symbol, LocalDate date, String propertyName,
-      String propertyValue) {
+      Double propertyValue) {
     this.symbol = symbol;
     this.date = date;
     this.propertyName = propertyName;
@@ -21,7 +21,16 @@ public class BarProperty implements ExportableToDB {
   @Override
   public PreparedStatement prepareExportSQLStatement(Connection connection, String... foreignKeys)
       throws SQLException {
-    return null;
+    String query = "INSERT INTO BarProperty(" + String.join(",",
+        new String[] {"barPropertyName", "barPropertyValue", "date", "symbol"})
+        + ") VALUE(?,?,?,?)";
+
+    PreparedStatement statement = connection.prepareStatement(query);
+    statement.setString(1,symbol);
+    statement.setString(2,date.toString());
+    statement.setString(3,propertyName);
+    statement.setDouble(4,propertyValue);
+    return statement;
   }
 
 

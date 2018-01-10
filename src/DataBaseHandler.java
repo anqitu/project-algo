@@ -64,6 +64,7 @@ public class DataBaseHandler {
     }
   }
 
+
   public ArrayList<Contract> readContractDataFromContractTable() {
     System.out.println("Getting contract(companyName not NULL) information from Contract Table...");
     try{

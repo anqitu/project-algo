@@ -70,7 +70,7 @@ public class AutoTraderApp {
         1000000);
     // Set stop loss
     for (Contract contract : contracts) {
-      tradingConfig.setStopLoss(contract, 0.15);
+      tradingConfig.setStopLoss(contract, 0.20);
     }
 
 
@@ -285,7 +285,8 @@ public class AutoTraderApp {
     System.out.println(contracts.size());
 
 
-    autoTrader.runSimulationWithDB(contracts, tradingConfig, new Strategy() {
+    ArrayList<Contract> contracts1 = new ArrayList<>(contracts.subList(0,250));
+    autoTrader.runSimulationWithDB(contracts1, tradingConfig, new Strategy() {
 
           Condition condition1 = ((contractMarketData, bar) ->
               bar.getProperty("20dma") > bar.getProperty("50dma"));
@@ -364,12 +365,13 @@ public class AutoTraderApp {
 
             TreeMap<LocalDate, Bar> contractMarketData = marketData.get(contract);
 
+
             if (contractMarketData.size() > 1) {
               Bar previous = contractMarketData.lowerEntry(bar.getDate()).getValue();
 
               boolean previousPosition = previous.getProperty("position") == 1;
-              boolean shouldBuy = !previousPosition && previous.getProperty("all_4") == 0 &&
-                  bar.getProperty("all_4") == 1;
+              Boolean shouldBuy = !bar.isLastBar() &&
+                  !previousPosition && previous.getProperty("all_4") == 0 && bar.getProperty("all_4") == 1;
               bar.setProperty("position", shouldBuy ? 1 :
                   (previousPosition && previous.getProperty("stop_out") == 0 ? 1 : 0));
 
@@ -396,8 +398,8 @@ public class AutoTraderApp {
           @Override
           public boolean shouldSell(AssetManager am, Contract contract,
               HashMap<Contract, TreeMap<LocalDate, Bar>> marketData, Bar bar) {
-            boolean shouldSell = bar.getProperty("position") == 1 &&
-                bar.getLow() < bar.getProperty("trailing_stop_loss");
+            boolean shouldSell = bar.isLastBar() || (bar.getProperty("position") == 1 &&
+                bar.getLow() < bar.getProperty("trailing_stop_loss"));
             bar.setProperty("stop_out", shouldSell ? 1 : 0);
             return shouldSell;
           }

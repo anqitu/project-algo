@@ -17,6 +17,16 @@ public class Bar implements ExportableToCSV, ExportableToDB {
   private double low;
   private double close;
   private HashMap<String, Double> properties;
+  private boolean isLastBar = false;
+
+  public void setLastBar(boolean lastBar) {
+    isLastBar = lastBar;
+  }
+
+  public boolean isLastBar() {
+
+    return isLastBar;
+  }
 
   public Bar() {
   }
@@ -182,7 +192,8 @@ public class Bar implements ExportableToCSV, ExportableToDB {
 
   @Override
   public PreparedStatement prepareExportSQLStatement(Connection connection, String...foreignKeys) throws
-      SQLException { String query = "INSERT INTO Bar(" + String.join(",",
+      SQLException {
+    String query = "INSERT INTO Bar(" + String.join(",",
         new String[] {"date", "symbol", "open", "high", "low", "close"})
         + ") VALUE(?,?,?,?,?,?)";
 

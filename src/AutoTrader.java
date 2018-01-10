@@ -314,7 +314,9 @@ public class AutoTrader {
 
 
   public void runSimulationWithDB(ArrayList<Contract> contracts, TradingConfig config, Strategy strategy) {
-    ArrayList<Bar> bars = dataBaseHandler.readBarDataFromBarTable();
+//    ArrayList<Bar> bars = dataBaseHandler.readBarDataFromBarTable();
+    ArrayList<Bar> bars = dataBaseHandler.readBarDataFromBarTableForContracts(contracts);
+
     HashMap<String, LocalDate> contractFirstBarDates = dataBaseHandler.getFirstBarDate();
     HashMap<String, LocalDate> contractLastBarDates = dataBaseHandler.getLastBarDate();
     TreeSet<LocalDate> dates = dataBaseHandler.getAllDates();
@@ -357,15 +359,10 @@ public class AutoTrader {
       // Determine action and execute sell first if needed
       for (Contract contract : contractsAvailable) {
         Bar bar = simulatedData.get(contract).get(date);
+        bar.setLastBar(date == contractLastBarDates.get(contract.getSymbol()));
 
-        // Sell the stock on the day of last bar
-        if (historicalData.get(contract).size() == 0){
-          bar.setShouldSell(true);
-          bar.setShouldBuy(false);
-        } else {
-          bar.setShouldBuy(strategy.shouldBuy(am, contract, simulatedData, bar));
-          bar.setShouldSell(strategy.shouldSell(am, contract, simulatedData, bar));
-        }
+        bar.setShouldBuy(strategy.shouldBuy(am, contract, simulatedData, bar));
+        bar.setShouldSell(strategy.shouldSell(am, contract, simulatedData, bar));
 
         if (bar.shouldSell()) {
           double sellPrice = strategy.getExitPrice(am, contract, simulatedData, bar);
