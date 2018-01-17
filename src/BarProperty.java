@@ -22,7 +22,7 @@ public class BarProperty implements ExportableToDB {
   public PreparedStatement prepareExportSQLStatement(Connection connection, String... foreignKeys)
       throws SQLException {
     String query = "INSERT INTO BarProperty(" + String.join(",",
-        new String[] {"barPropertyName", "barPropertyValue", "date", "symbol"})
+        new String[] { "symbol", "date", "barPropertyName", "barPropertyValue"})
         + ") VALUE(?,?,?,?)";
 
     PreparedStatement statement = connection.prepareStatement(query);

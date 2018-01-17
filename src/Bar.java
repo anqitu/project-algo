@@ -180,11 +180,6 @@ public class Bar implements ExportableToCSV, ExportableToDB {
     return stringBuilder.toString();
   }
 
-//  @Override
-//  public PreparedStatement prepareExportSQLStatement(Connection connection) throws SQLException {
-//    return null;
-//  }
-
   public Bar copy() {
     Bar clone = new Bar(date, symbol, open, high, low, close);
     return clone;
@@ -198,9 +193,9 @@ public class Bar implements ExportableToCSV, ExportableToDB {
         + ") VALUE(?,?,?,?,?,?)";
 
     PreparedStatement statement = connection.prepareStatement(query);
-    statement.setString(1,date.toString());
-    statement.setString(2,symbol);
-    statement.setDouble(3,open);
+    statement.setString(1, date.toString());
+    statement.setString(2, symbol);
+    statement.setDouble(3, open);
     statement.setDouble(4, high);
     statement.setDouble(5, low);
     statement.setDouble(6, close);

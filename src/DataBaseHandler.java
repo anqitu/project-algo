@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -214,5 +215,24 @@ public class DataBaseHandler {
     }
     System.out.println("Finished reading all dates information");
     return dates;
+  }
+
+  public HashMap<String, TreeMap<String, Double>> getBarPropertiesByDate(LocalDate date) {
+    HashMap<String, TreeMap<String, Double>> barProperties = new HashMap<>();
+    try{
+      Statement statement = connection.createStatement();
+      String query = "SELECT symbol, barPropertyName, barPropertyValue FROM BarProperty WHERE date = " + date.toString();
+      ResultSet resultSet = statement.executeQuery(query);
+      while (resultSet.next()){
+        String symbol = resultSet.getString(1);
+        String barPropertyName = resultSet.getString(2);
+        Double barPropertyValue = resultSet.getDouble(3);
+        if (!barProperties.containsKey(symbol)) barProperties.put(symbol, new TreeMap<>());
+        barProperties.get(symbol).put(barPropertyName, barPropertyValue);
+      }
+    } catch (Exception e){
+      e.printStackTrace();
+    }
+    return null;
   }
 }
